@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.app.json --noEmit && vite build",
     "preview": "vite preview --host --port 5200 --strictPort",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "engine": "tsx src/engine/engine.check.ts"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -21,6 +22,7 @@
     "autoprefixer": "10.5.0",
     "postcss": "8.5.15",
     "tailwindcss": "3.4.19",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "vite": "7.3.3"
   }

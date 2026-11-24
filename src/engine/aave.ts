@@ -1,15 +1,21 @@
+import { USDC, type Asset } from './assets';
 import { sortCandles, type Candle } from './candles';
 import type { Mark } from './lp';
 import { amountUsd, borrowIndexAfter, liquidityIndexAfter, maxDrawdown, money, price8, RAY, swapRaw } from './units';
 
+function trade(amount: bigint, from: Reserve, to: Reserve, feeBps: number): bigint {
+  return swapRaw(
+    amount,
+    { decimals: from.asset.decimals, priceUsd: from.priceUsd },
+    { decimals: to.asset.decimals, priceUsd: to.priceUsd },
+    feeBps,
+  );
+}
+
 export const MAX_LOOPS = 4;
 export const MAX_BORROW_BPS = 7_500;
 
-export type Asset = {
-  symbol: string;
-  address: string;
-  decimals: number;
-};
+export type { Asset };
 
 export type Reserve = {
   asset: Asset;
@@ -80,7 +86,7 @@ export type AaveQuote = {
   realize?: boolean;
 };
 
-const USDC_ADDRESS = '0xaf88d065e77c8cc2239327c5edb3a432268e5831';
+const USDC_ADDRESS = USDC.address;
 
 export function sized(availableBase: bigint, oraclePrice8: bigint, decimals: number, bps: number): bigint {
   if (oraclePrice8 === 0n || availableBase === 0n || bps === 0) return 0n;
@@ -99,23 +105,23 @@ export function openAave(input: AaveOpenInput): AaveSnapshot {
   if (input.kind === 5) {
     const supplied = asset.asset.address.toLowerCase() === USDC_ADDRESS
       ? input.principalUsdc
-      : swapRaw(input.principalUsdc, usdc.asset, asset.asset, fee);
+      : trade(input.principalUsdc, usdc, asset, fee);
     collateral = [legFrom(asset, supplied)];
   } else if (input.kind === 6) {
     requireLoops(input.loops, input.borrowBps);
     if (asset.asset.address.toLowerCase() === USDC_ADDRESS) throw new Error('loop asset must not be USDC');
-    let held = swapRaw(input.principalUsdc, usdc.asset, asset.asset, fee);
+    let held = trade(input.principalUsdc, usdc, asset, fee);
     collateral = [legFrom(asset, held)];
     let borrowed = 0n;
     for (let i = 0; i < (input.loops ?? 0); i += 1) {
       const tranche = borrowable(collateral, debt, usdc, input.borrowBps ?? 0);
       if (tranche === 0n) break;
       borrowed += tranche;
-      held += swapRaw(tranche, usdc.asset, asset.asset, fee);
+      held += trade(tranche, usdc, asset, fee);
       collateral = [legFrom(asset, held)];
       debt = [debtFrom(usdc, borrowed)];
     }
-    if (borrowed === 0n) throw new Error('nothing borrowed');
+    if (borrowed === 0n) throw new Error('Aave available borrow is zero at the current LTV');
   } else if (input.kind === 7) {
     requireLoops(input.loops, input.borrowBps);
     if (!asset.borrowingEnabled) throw new Error('borrowing disabled');
@@ -128,7 +134,7 @@ export function openAave(input: AaveOpenInput): AaveSnapshot {
       const tranche = borrowable(collateral, debt, asset, input.borrowBps ?? 0);
       if (tranche === 0n) break;
       borrowed += tranche;
-      const sold = swapRaw(tranche, asset.asset, usdc.asset, fee);
+      const sold = trade(tranche, asset, usdc, fee);
       if (i + 1 === loops) proceeds = sold;
       else {
         posted += sold;
@@ -136,7 +142,7 @@ export function openAave(input: AaveOpenInput): AaveSnapshot {
       }
       debt = [debtFrom(asset, borrowed)];
     }
-    if (borrowed === 0n) throw new Error('nothing borrowed');
+    if (borrowed === 0n) throw new Error('Aave available borrow is zero at the current LTV');
   } else if (input.kind === 8) {
     requireBps(input.borrowBps);
     const postedReserve = input.collateralIsAsset ? asset : usdc;
@@ -144,18 +150,18 @@ export function openAave(input: AaveOpenInput): AaveSnapshot {
       throw new Error('collateral asset must not be USDC');
     }
     const posted = input.collateralIsAsset
-      ? swapRaw(input.principalUsdc, usdc.asset, asset.asset, fee)
+      ? trade(input.principalUsdc, usdc, asset, fee)
       : input.principalUsdc;
     collateral = [legFrom(postedReserve, posted)];
     const borrowed = borrowable(collateral, debt, usdc, input.borrowBps ?? 0);
-    if (borrowed === 0n) throw new Error('nothing borrowed');
+    if (borrowed === 0n) throw new Error('Aave available borrow is zero at the current LTV');
     debt = [debtFrom(usdc, borrowed)];
   } else {
     const buys = input.basket ?? [];
     if (buys.length < 1 || buys.length > 3) throw new Error('basket needs 1 to 3 legs');
     if (asset.asset.address.toLowerCase() === USDC_ADDRESS) throw new Error('basket collateral must not be USDC');
     const seen = new Set<string>([USDC_ADDRESS, asset.asset.address.toLowerCase()]);
-    collateral = [legFrom(asset, swapRaw(input.principalUsdc, usdc.asset, asset.asset, fee))];
+    collateral = [legFrom(asset, trade(input.principalUsdc, usdc, asset, fee))];
     let borrowed = 0n;
     for (const buy of buys) {
       const address = buy.asset.address.toLowerCase();
@@ -164,9 +170,9 @@ export function openAave(input: AaveOpenInput): AaveSnapshot {
       requireBps(buy.borrowBps);
       const legReserve = reserveFor(input.reserves, address);
       const tranche = borrowable(collateral, debt, usdc, buy.borrowBps);
-      if (tranche === 0n) throw new Error('nothing borrowed');
+      if (tranche === 0n) throw new Error('Aave available borrow is zero at the current LTV');
       borrowed += tranche;
-      collateral.push(legFrom(legReserve, swapRaw(tranche, usdc.asset, legReserve.asset, fee)));
+      collateral.push(legFrom(legReserve, trade(tranche, usdc, legReserve, fee)));
       debt = [debtFrom(usdc, borrowed)];
     }
   }

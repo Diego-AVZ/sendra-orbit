@@ -1,9 +1,8 @@
+import { USDC } from './assets';
 import { feesFromCandles, liquidityShare, sortCandles, type Candle } from './candles';
 import { depositFromToken1, dilute, feesOwed, getAmountsForLiquidity } from './liquidity';
 import { assertRange, humanAtTick, inRange, sqrtAtHuman, sqrtPriceAtTick } from './tick';
 import { amountUsd, humanFromSqrt, maxDrawdown, money } from './units';
-
-export const USDC = '0xaf88d065e77c8cc2239327c5edb3a432268e5831';
 
 export type LpSnapshot = {
   pool: string;
@@ -179,8 +178,8 @@ function exitFeeUsd(
 ): number {
   const fee = snapshot.swapFeeBps / 10_000;
   let cost = 0;
-  if (snapshot.token0 !== USDC) cost += amountUsd(amounts.amount0, snapshot.decimals0, quote.price0Usd) * fee;
-  if (snapshot.token1 !== USDC) cost += amountUsd(amounts.amount1, snapshot.decimals1, quote.price1Usd) * fee;
+  if (snapshot.token0 !== USDC.address) cost += amountUsd(amounts.amount0, snapshot.decimals0, quote.price0Usd) * fee;
+  if (snapshot.token1 !== USDC.address) cost += amountUsd(amounts.amount1, snapshot.decimals1, quote.price1Usd) * fee;
   return cost;
 }
 
