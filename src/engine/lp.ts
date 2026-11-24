@@ -1,7 +1,7 @@
 import { feesFromCandles, liquidityShare, sortCandles, type Candle } from './candles';
 import { depositFromToken1, dilute, feesOwed, getAmountsForLiquidity } from './liquidity';
 import { assertRange, humanAtTick, inRange, sqrtAtHuman, sqrtPriceAtTick } from './tick';
-import { amountUsd, maxDrawdown, money, token1Cost } from './units';
+import { amountUsd, humanFromSqrt, maxDrawdown, money } from './units';
 
 export const USDC = '0xaf88d065e77c8cc2239327c5edb3a432268e5831';
 
@@ -112,11 +112,7 @@ export function openLp(input: LpOpenInput): LpSnapshot {
     feeGrowth0: input.feeGrowth0 ?? 0n,
     feeGrowth1: input.feeGrowth1 ?? 0n,
     sqrtPrice: input.sqrtPriceX96,
-    entryPrice: humanAtTick(
-      nearest(input.sqrtPriceX96, input.decimals0, input.decimals1),
-      input.decimals0,
-      input.decimals1,
-    ),
+    entryPrice: humanFromSqrt(input.sqrtPriceX96, input.decimals0, input.decimals1),
     price0Usd: input.price0Usd,
     price1Usd: input.price1Usd,
     principalUsd: amountUsd(input.budgetToken1, input.decimals1, input.price1Usd),
@@ -124,29 +120,6 @@ export function openLp(input: LpOpenInput): LpSnapshot {
     gasUsd: input.gasUsd ?? 0,
     swapFeeBps: input.swapFeeBps ?? 0,
   };
-}
-
-function nearest(sqrtPrice: bigint, decimals0: number, decimals1: number): number {
-  const human = humanPrice(sqrtPrice, decimals0, decimals1);
-  return Math.round(Math.log(human * 10 ** (decimals1 - decimals0)) / Math.log(1.0001));
-}
-
-export function humanPrice(sqrtPrice: bigint, decimals0: number, decimals1: number): number {
-  const { humanFromSqrt } = requireHuman();
-  return humanFromSqrt(sqrtPrice, decimals0, decimals1);
-}
-
-function requireHuman(): { humanFromSqrt: typeof import('./units').humanFromSqrt } {
-  return { humanFromSqrt: (sqrt, d0, d1) => importHuman(sqrt, d0, d1) };
-}
-
-function importHuman(sqrtPrice: bigint, decimals0: number, decimals1: number): number {
-  const shift = decimals0 - decimals1;
-  let numerator = sqrtPrice * sqrtPrice;
-  let denominator = (1n << 96n) * (1n << 96n);
-  if (shift >= 0) numerator *= 10n ** BigInt(shift);
-  else denominator *= 10n ** BigInt(-shift);
-  return Number((numerator * 10n ** 8n) / denominator) / 1e8;
 }
 
 export function markLp(snapshot: LpSnapshot, quote: LpQuote): Mark {
@@ -187,7 +160,7 @@ export function markLp(snapshot: LpSnapshot, quote: LpQuote): Mark {
     liquidated: false,
     liquidationPriceUsd: null,
     maxDrawdownUsd: maxDrawdown([snapshot.entryEquityUsd, ...path, equity]),
-    price: money(importHuman(sqrtPrice, snapshot.decimals0, snapshot.decimals1)),
+    price: money(humanFromSqrt(sqrtPrice, snapshot.decimals0, snapshot.decimals1)),
   };
 }
 
@@ -237,8 +210,4 @@ function align(cumulative: number[], growthFees: number | null): number[] {
   const last = cumulative[cumulative.length - 1] ?? 0;
   if (last <= 0) return cumulative.map((_, index) => (index === cumulative.length - 1 ? growthFees : 0));
   return cumulative.map((fee) => (fee / last) * growthFees);
-}
-
-export function unspentToken1(snapshot: LpSnapshot): bigint {
-  return token1Cost(snapshot.amount0, snapshot.sqrtPrice) + snapshot.amount1;
 }

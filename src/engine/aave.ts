@@ -197,7 +197,7 @@ export function markAave(snapshot: AaveSnapshot, quote: AaveQuote): Mark {
   if (candles.length) prices.set(snapshot.asset, candles[candles.length - 1].close);
 
   const valued = valueBook(snapshot, prices, quote);
-  const exit = quote.realize ? exitCost(snapshot, valued, prices) : 0;
+  const exit = quote.realize ? exitCost(snapshot, prices) : 0;
   const equity = valued.liquidated ? valued.liquidatedEquity : valued.equity;
   const path = candles.map((candle) => {
     const stepped = new Map(prices);
@@ -265,7 +265,6 @@ function valueBook(snapshot: AaveSnapshot, prices: Map<string, number>, quote: A
   let suppliedUsd = 0;
   let collateralUsd = 0;
   let weightedThreshold = 0;
-  let weightedLtv = 0;
   let bonusWeighted = 0;
   let interestUsd = 0;
   for (const leg of snapshot.collateral) {
@@ -277,7 +276,6 @@ function valueBook(snapshot: AaveSnapshot, prices: Map<string, number>, quote: A
     if (!leg.collateralEnabled) continue;
     collateralUsd += usd;
     weightedThreshold += usd * leg.liquidationThresholdBps;
-    weightedLtv += usd * leg.ltvBps;
     bonusWeighted += usd * leg.liquidationBonusBps;
   }
   let debtUsd = 0;
@@ -304,25 +302,21 @@ function valueBook(snapshot: AaveSnapshot, prices: Map<string, number>, quote: A
     debtUsd,
     suppliedUsd,
     proceedsUsd,
-    availableBase: baseFromUsd(Math.max(0, (collateralUsd * (collateralUsd > 0 ? weightedLtv / collateralUsd : 0)) / 10_000 - debtUsd)),
   };
 }
 
-function exitCost(snapshot: AaveSnapshot, valued: { suppliedUsd: number; debtUsd: number }, prices: Map<string, number>): number {
+function exitCost(snapshot: AaveSnapshot, prices: Map<string, number>): number {
   const fee = snapshot.swapFeeBps / 10_000;
   let cost = 0;
   for (const leg of snapshot.collateral) {
     if (leg.asset === USDC_ADDRESS) continue;
-    const price = prices.get(leg.asset) ?? leg.openPriceUsd;
-    cost += amountUsd(leg.amount, leg.decimals, price) * fee;
+    cost += amountUsd(leg.amount, leg.decimals, prices.get(leg.asset) ?? leg.openPriceUsd) * fee;
   }
   for (const leg of snapshot.debt) {
     if (leg.asset === USDC_ADDRESS) continue;
-    const price = prices.get(leg.asset) ?? leg.openPriceUsd;
-    cost += amountUsd(leg.amount, leg.decimals, price) * fee;
+    cost += amountUsd(leg.amount, leg.decimals, prices.get(leg.asset) ?? leg.openPriceUsd) * fee;
   }
-  if (snapshot.kind === 8) return cost;
-  return Math.min(cost, valued.suppliedUsd + valued.debtUsd);
+  return cost;
 }
 
 function accruedAmount(leg: Leg, quote: AaveQuote, kind: 'supply' | 'borrow'): bigint {
@@ -337,28 +331,27 @@ function accruedAmount(leg: Leg, quote: AaveQuote, kind: 'supply' | 'borrow'): b
 }
 
 function borrowable(collateral: Leg[], debt: Leg[], reserve: Reserve, bps: number): bigint {
-  const prices = openPricesFromLegs(collateral, debt);
-  const book = valueBook(
-    { collateral, debt, proceedsUsdc: 0n, kind: 5, asset: reserve.asset.address, symbol: '', principalUsdc: 0n, principalUsd: 0, swapFeeBps: 0, gasUsd: 0, entryEquityUsd: 0, openedAt: '' },
-    prices,
-    { at: '', seconds: 0 },
-  );
-  return sized(book.availableBase, price8(reserve.priceUsd), reserve.asset.decimals, bps);
+  return sized(availableBase(collateral, debt), price8(reserve.priceUsd), reserve.asset.decimals, bps);
 }
 
-function baseFromUsd(usd: number): bigint {
-  if (usd <= 0) return 0n;
-  return BigInt(Math.round(usd * 1e8));
+function availableBase(collateral: Leg[], debt: Leg[]): bigint {
+  let posted = 0n;
+  let weightedLtv = 0n;
+  let owed = 0n;
+  for (const leg of collateral) {
+    if (!leg.collateralEnabled) continue;
+    const base = (leg.amount * price8(leg.openPriceUsd)) / 10n ** BigInt(leg.decimals);
+    posted += base;
+    weightedLtv += base * BigInt(leg.ltvBps);
+  }
+  for (const leg of debt) owed += (leg.amount * price8(leg.openPriceUsd)) / 10n ** BigInt(leg.decimals);
+  if (posted === 0n) return 0n;
+  const capacity = (posted * (weightedLtv / posted)) / 10_000n;
+  return capacity > owed ? capacity - owed : 0n;
 }
 
 function openPrices(reserves: Reserve[]): Record<string, number> {
   return Object.fromEntries(reserves.map((reserve) => [reserve.asset.address.toLowerCase(), reserve.priceUsd]));
-}
-
-function openPricesFromLegs(collateral: Leg[], debt: Leg[]): Map<string, number> {
-  const prices = new Map<string, number>();
-  for (const leg of [...collateral, ...debt]) prices.set(leg.asset, leg.openPriceUsd);
-  return prices;
 }
 
 function legFrom(reserve: Reserve, amount: bigint): Leg {
