@@ -26,7 +26,7 @@ const proxy = {
 };
 
 function tradingViewLibrary() {
-  const root = resolve(fileURLToPath(new URL('../../web-frontend/charting_library', import.meta.url)));
+  const root = resolve(fileURLToPath(new URL('./charting_library', import.meta.url)));
   const types: Record<string, string> = {
     '.js': 'text/javascript',
     '.css': 'text/css',
