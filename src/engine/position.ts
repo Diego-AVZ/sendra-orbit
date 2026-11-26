@@ -2,7 +2,7 @@ import { openAave, markAave, type AaveOpenInput, type AaveQuote, type AaveSnapsh
 import { markLp, openLp, type LpOpenInput, type LpQuote, type LpSnapshot, type Mark } from './lp';
 import { markSpot, openSpot, type SpotOpenInput, type SpotQuote, type SpotSnapshot } from './spot';
 import { USDC } from './assets';
-import { money, swapRaw } from './units';
+import { money, swapRaw, usdcRaw } from './units';
 
 export type Kind = 2 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -20,6 +20,14 @@ export type PaperPosition = {
   snapshot: Snapshot;
   mark: Mark | null;
   close: Mark | null;
+  /** USDC of 6 decimals, fixed at close. pnl = capitalOut - principal, gas excluded. */
+  basis: PulseBasis | null;
+};
+
+export type PulseBasis = {
+  principal: bigint;
+  capitalOut: bigint;
+  pnl: bigint;
 };
 
 type Owner = { userId?: string | null; evaluationId?: string | null; at?: string };
@@ -119,7 +127,7 @@ export function markPosition(position: PaperPosition, quote: PositionQuote): Pap
 export function closePosition(position: PaperPosition, quote: PositionQuote): PaperPosition {
   if (position.status === 'closed') throw new Error('position is closed');
   const mark = quotePosition(position, quote, true);
-  return { ...position, status: 'closed', closedAt: mark.at, mark, close: mark };
+  return { ...position, status: 'closed', closedAt: mark.at, mark, close: mark, basis: pulseBasis(position, mark, quote) };
 }
 
 export type PositionQuote =
@@ -184,7 +192,28 @@ function row(
     snapshot,
     mark,
     close: null,
+    basis: null,
   };
+}
+
+function pulseBasis(position: PaperPosition, mark: Mark, quote: PositionQuote): PulseBasis {
+  const principal = principalRaw(position);
+  const capitalOut = quote.kind === 4
+    ? swapRaw(
+      (position.snapshot as SpotSnapshot).tokens,
+      { decimals: (position.snapshot as SpotSnapshot).decimals, priceUsd: quote.spot.priceUsd },
+      { decimals: 6, priceUsd: 1 },
+      (position.snapshot as SpotSnapshot).feeBps,
+    )
+    : usdcRaw(mark.equityUsd);
+  return { principal, capitalOut, pnl: capitalOut - principal };
+}
+
+function principalRaw(position: PaperPosition): bigint {
+  if (position.kind === 2) return usdcRaw((position.snapshot as LpSnapshot).principalUsd);
+  if (position.kind === 8) return (position.snapshot as { aave: AaveSnapshot }).aave.principalUsdc;
+  if (position.kind === 4) return (position.snapshot as SpotSnapshot).principalUsdc;
+  return (position.snapshot as AaveSnapshot).principalUsdc;
 }
 
 export function pack(value: unknown): unknown {
@@ -223,6 +252,9 @@ export type PositionRow = {
   mark: Mark | null;
   close: Mark | null;
   pnl_usd: number | null;
+  principal_raw: string | null;
+  capital_out_raw: string | null;
+  pnl_raw: string | null;
 };
 
 export function toRow(position: PaperPosition): PositionRow {
@@ -239,6 +271,9 @@ export function toRow(position: PaperPosition): PositionRow {
     mark: position.mark,
     close: position.close,
     pnl_usd: position.close?.pnlUsd ?? position.mark?.pnlUsd ?? null,
+    principal_raw: position.basis ? position.basis.principal.toString() : null,
+    capital_out_raw: position.basis ? position.basis.capitalOut.toString() : null,
+    pnl_raw: position.basis ? position.basis.pnl.toString() : null,
   };
 }
 
@@ -255,5 +290,12 @@ export function fromRow(row: PositionRow): PaperPosition {
     snapshot: unpack(row.open_snapshot) as Snapshot,
     mark: row.mark,
     close: row.close,
+    basis: row.principal_raw == null || row.capital_out_raw == null || row.pnl_raw == null
+      ? null
+      : {
+        principal: BigInt(row.principal_raw),
+        capitalOut: BigInt(row.capital_out_raw),
+        pnl: BigInt(row.pnl_raw),
+      },
   };
 }

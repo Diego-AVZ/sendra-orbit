@@ -13,6 +13,7 @@ const GROUPS = [
     label: '',
     items: [
       { to: '/app', label: 'Overview', end: true, icon: 'overview' },
+      { to: '/app/evaluation', label: 'Evaluation', end: false, icon: 'evaluation' },
       { to: '/app/portfolio', label: 'Portfolio', end: false, icon: 'portfolio' },
     ],
   },
@@ -28,6 +29,7 @@ const GROUPS = [
 
 const ICONS: Record<string, string> = {
   overview: 'M2.5 2.5h4.2v4.2H2.5zM9.3 2.5h4.2v4.2H9.3zM2.5 9.3h4.2v4.2H2.5zM9.3 9.3h4.2V13.5H9.3z',
+  evaluation: 'M8 2.2 13.2 4.4v3.8c0 3-2.1 4.9-5.2 6.2C4.9 13.1 2.8 11.2 2.8 8.2V4.4z',
   portfolio: 'M2.5 5h11v8h-11zM2.5 8h11M6 5V3.5h4V5',
   axis: 'M2.5 12.2 5.6 8l2.5 2.3 5.4-6.2',
   aave: 'M8 2.2 13.2 5.2v5.6L8 13.8 2.8 10.8V5.2z',
@@ -54,6 +56,7 @@ function navOpen(): boolean {
 
 const DOCK = [
   { to: '/app', label: 'Home', end: true },
+  { to: '/app/evaluation', label: 'Evaluation', end: false },
   { to: '/app/portfolio', label: 'Portfolio', end: false },
   { to: '/app/spot', label: 'Axis', end: false },
   { to: '/app/aave', label: 'Aave', end: false },
@@ -116,6 +119,7 @@ function crumb(pathname: string): string {
   if (pathname.endsWith('/liquidity')) return 'Liquidity';
   if (pathname.endsWith('/aave')) return 'Aave';
   if (pathname.endsWith('/portfolio')) return 'Portfolio';
+  if (pathname.endsWith('/evaluation')) return 'Evaluation';
   return 'Overview';
 }
 

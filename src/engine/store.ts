@@ -30,6 +30,9 @@ async function store(position: PaperPosition, accessToken?: string): Promise<Pap
       mark: saved.mark,
       close: saved.close,
       pnl_usd: saved.pnl_usd,
+      principal_raw: saved.principal_raw,
+      capital_out_raw: saved.capital_out_raw,
+      pnl_raw: saved.pnl_raw,
     },
   });
   const row = patched[0] ?? await insertPosition(saved, accessToken);

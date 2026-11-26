@@ -1691,6 +1691,16 @@ html.ob-root body {
 }
 .ob-limit i b { display: block; height: 100%; margin: 0; background: var(--accent); }
 .ob-limit.is-hot i b { background: var(--down); }
+.ob-limit.is-done i b { background: var(--up); }
+.ob-eval {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .ob-eval { grid-template-columns: 1fr; }
+}
 
 .ob-board-head,
 .ob-board-row {

@@ -27,6 +27,13 @@ export function money(value: number): number {
   return Math.round(value * 1e8) / 1e8;
 }
 
+/** USDC of 6 decimals. Negative equity is a zero payout. */
+export function usdcRaw(usd: number): bigint {
+  if (!Number.isFinite(usd)) throw new Error('usdc');
+  if (usd <= 0) return 0n;
+  return BigInt(Math.round(usd * 1_000_000));
+}
+
 export function amountUsd(amount: bigint, decimals: number, priceUsd: number): number {
   return rawToHuman(amount, decimals) * priceUsd;
 }

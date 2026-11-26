@@ -182,6 +182,9 @@ const closed = closePosition(position, {
   lp: { at: '2026-02-01T00:00:00.000Z', sqrtPriceX96: sqrtPrice, price0Usd: 3000, price1Usd: 1, realize: true },
 });
 check(closed.status === 'closed' && closed.close?.at === '2026-02-01T00:00:00.000Z', 'close writes the final mark');
+check(closed.basis != null && closed.basis.pnl === closed.basis.capitalOut - closed.basis.principal, 'close fixes the pulse basis');
+const basisRow = toRow(closed);
+check(fromRow(basisRow).basis?.pnl === closed.basis?.pnl, 'pulse basis roundtrip');
 let refused = false;
 try {
   closePosition(closed, { kind: 2, lp: { at: '2026-03-01T00:00:00.000Z', sqrtPriceX96: sqrtPrice, price0Usd: 1, price1Usd: 1 } });

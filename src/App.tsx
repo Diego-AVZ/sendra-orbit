@@ -5,6 +5,7 @@ import { BookProvider } from '@/desk/book';
 import { SessionProvider } from '@/desk/session';
 import { AaveDesk } from '@/desk/AaveDesk';
 import { LiquidityDesk } from '@/desk/LiquidityDesk';
+import { Evaluation } from '@/desk/Evaluation';
 import { Overview } from '@/desk/Overview';
 import { Portfolio } from '@/desk/Portfolio';
 import { Shell } from '@/desk/Shell';
@@ -60,6 +61,7 @@ export default function App() {
             }
           >
             <Route index element={<Overview />} />
+            <Route path="evaluation" element={<Evaluation />} />
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="spot" element={<SpotDesk />} />
             <Route path="aave" element={<AaveDesk />} />
