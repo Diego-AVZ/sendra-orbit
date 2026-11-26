@@ -35,7 +35,9 @@ export function applyPalette(id: PaletteId) {
 
 export function subscribePalette(listener: (id: PaletteId) => void) {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function usePalette(): PaletteId {

@@ -631,7 +631,19 @@ body {
 .price .fee span { font-size: 1rem; font-weight: 650; color: var(--mute); }
 .price .size { margin: 0; color: #f4f4f5; font-size: 1.35rem; font-weight: 800; }
 .price ul { margin: 0.2rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.28rem; }
-.price li { font-weight: 650; }
+.price li {
+  min-height: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: default;
+  font-weight: 650;
+  transition: none;
+}
+.price li:hover { border-color: transparent; transform: none; }
+.land-rails .price h3 { margin: 0; }
 .price .land-go { width: 100%; margin-top: auto; justify-content: center; }
 .price.is-soon { cursor: default; opacity: 0.72; }
 .price.is-soon:hover { border-color: var(--line); transform: none; }

@@ -13,7 +13,6 @@ import {
   type PositionQuote,
 } from './position';
 import { saveMark, savePosition } from './store';
-import type { Asset } from './assets';
 import type { AaveOpenInput } from './aave';
 import type { LpOpenInput } from './lp';
 import type { SpotOpenInput } from './spot';
@@ -108,16 +107,15 @@ async function finish(position: PaperPosition, warnings: string[], options: Pers
 async function quoteLive(position: PaperPosition, rpc: string | undefined, warnings: string[]): Promise<PositionQuote> {
   const since = Math.floor(Date.parse(position.openedAt) / 1000);
   if (position.kind === 2 || position.kind === 8) {
-    const lp = position.kind === 2 ? position.snapshot as { pool: string; token0: string; token1: string; tickLower: number; tickUpper: number } : (position.snapshot as { lp: { pool: string; token0: string; token1: string; tickLower: number; tickUpper: number } }).lp;
+    const lp = position.kind === 2 ? position.snapshot as LpShape : (position.snapshot as { lp: LpShape }).lp;
     const pool = await readPool(lp.pool, lp.tickLower, lp.tickUpper, rpc);
-    const shape = lp as { decimals0: number; decimals1: number };
     let candles;
     try {
       candles = await fetchPoolCandles(lp.pool, lp.token0, lp.token1, since);
     } catch (error) {
       noteQuote(warnings, error, 'candles unavailable');
     }
-    const prices = await liveUsdPrices(lp.pool, lp.token0, lp.token1, shape.decimals0, shape.decimals1, pool.sqrtPriceX96, rpc);
+    const prices = await liveUsdPrices(lp.pool, lp.token0, lp.token1, lp.decimals0, lp.decimals1, pool.sqrtPriceX96, rpc);
     const lpQuote = {
       at: new Date().toISOString(),
       sqrtPriceX96: pool.sqrtPriceX96,
@@ -180,6 +178,8 @@ async function aaveQuote(position: PaperPosition, rpc: string | undefined, since
     candleSeconds: 3600,
   };
 }
+
+type LpShape = { pool: string; token0: string; token1: string; tickLower: number; tickUpper: number; decimals0: number; decimals1: number };
 
 type AssetLeg = { asset: string; symbol: string; decimals: number };
 
