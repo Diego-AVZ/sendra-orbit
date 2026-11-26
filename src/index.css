@@ -284,10 +284,15 @@ body {
 .land h1 em {
   display: block;
   margin-top: 0.06em;
+  margin-bottom: -0.16em;
+  padding-bottom: 0.16em;
+  line-height: 1.12;
   font-style: normal;
   background: var(--wash);
   -webkit-background-clip: text;
   background-clip: text;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   color: transparent;
 }
 
