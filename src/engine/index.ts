@@ -22,4 +22,4 @@ export {
 } from './position';
 export type { PaperPosition, PositionQuote, PositionRow } from './position';
 export { closeLive, openAaveLive, openLeveragedLive, openLpLive, openSpotLive, refreshLive } from './live';
-export { loadPosition, saveMark, savePosition, supabaseConfig } from './store';
+export { listPositions, loadPosition, saveMark, savePosition, supabaseConfig } from './store';

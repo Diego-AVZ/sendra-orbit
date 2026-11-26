@@ -24,7 +24,7 @@ const STARS: Star[] = Array.from({ length: 56 }, () => ({
 
 const RINGS = [
   { rx: 0.4, ry: 0.16, tilt: -0.15, speed: 0.32, color: 'rgba(246, 215, 168, 0.95)' },
-  { rx: 0.3, ry: 0.115, tilt: 0.55, speed: -0.48, color: 'rgba(158, 201, 255, 0.95)' },
+  { rx: 0.3, ry: 0.115, tilt: 0.55, speed: -0.48, color: 'rgba(61, 220, 151, 0.95)' },
   { rx: 0.18, ry: 0.18, tilt: 0, speed: 0.72, color: 'rgba(227, 164, 92, 1)' },
 ];
 

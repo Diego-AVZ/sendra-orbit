@@ -11,18 +11,17 @@ export function supabaseConfig(): Config | null {
 }
 
 export async function savePosition(position: PaperPosition, accessToken?: string): Promise<PaperPosition> {
-  const row = await request<PositionRow[]>('positions', {
-    method: 'POST',
-    token: accessToken,
-    body: toRow(position),
-  });
-  if (position.mark) await insertMark(position, accessToken);
-  return fromRow(row[0]);
+  return store(position, accessToken);
 }
 
 export async function saveMark(position: PaperPosition, accessToken?: string): Promise<PaperPosition> {
+  return store(position, accessToken);
+}
+
+/** Update the row. If this browser still has a position Supabase never received, insert it before the mark. */
+async function store(position: PaperPosition, accessToken?: string): Promise<PaperPosition> {
   const saved = toRow(position);
-  const row = await request<PositionRow[]>(`positions?id=eq.${position.id}`, {
+  const patched = await request<PositionRow[]>(`positions?id=eq.${position.id}`, {
     method: 'PATCH',
     token: accessToken,
     body: {
@@ -33,8 +32,20 @@ export async function saveMark(position: PaperPosition, accessToken?: string): P
       pnl_usd: saved.pnl_usd,
     },
   });
+  const row = patched[0] ?? await insertPosition(saved, accessToken);
   if (position.mark) await insertMark(position, accessToken);
-  return fromRow(row[0]);
+  return fromRow(row);
+}
+
+async function insertPosition(row: PositionRow, accessToken?: string): Promise<PositionRow> {
+  const created = await request<PositionRow[]>('positions?on_conflict=id', {
+    method: 'POST',
+    token: accessToken,
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: row,
+  });
+  if (!created[0]) throw new Error('Supabase did not store this position');
+  return created[0];
 }
 
 async function insertMark(position: PaperPosition, accessToken?: string) {
@@ -54,13 +65,19 @@ async function insertMark(position: PaperPosition, accessToken?: string) {
   });
 }
 
+export async function listPositions(accessToken?: string, evaluationId?: string | null): Promise<PaperPosition[]> {
+  const filter = evaluationId ? `&evaluation_id=eq.${evaluationId}` : '';
+  const rows = await request<PositionRow[]>(`positions?select=*&order=opened_at.desc${filter}`, { token: accessToken });
+  return rows.map(fromRow).filter((position) => !evaluationId || position.evaluationId === evaluationId);
+}
+
 export async function loadPosition(id: string, accessToken?: string): Promise<PaperPosition> {
   const rows = await request<PositionRow[]>(`positions?id=eq.${id}&select=*`, { token: accessToken });
   if (!rows[0]) throw new Error('position not found');
   return fromRow(rows[0]);
 }
 
-async function request<T>(path: string, init: { method?: string; token?: string; body?: unknown } = {}): Promise<T> {
+async function request<T>(path: string, init: { method?: string; token?: string; body?: unknown; prefer?: string } = {}): Promise<T> {
   const config = supabaseConfig();
   if (!config) throw new Error('Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
@@ -69,10 +86,16 @@ async function request<T>(path: string, init: { method?: string; token?: string;
       apikey: config.key,
       authorization: `Bearer ${init.token ?? config.key}`,
       'content-type': 'application/json',
-      prefer: 'return=representation',
+      prefer: init.prefer ?? 'return=representation',
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
-  if (!response.ok) throw new Error(`Supabase ${response.status}: ${await response.text()}`);
+  if (!response.ok) {
+    const text = await response.text();
+    if (response.status === 401 || response.status === 403 || response.status === 409 || text.includes('row-level security')) {
+      throw new Error('Saved in this browser. The shared book refused the write.');
+    }
+    throw new Error(`Supabase ${response.status}`);
+  }
   return (await response.json()) as T;
 }

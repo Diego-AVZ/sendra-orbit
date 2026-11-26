@@ -5,6 +5,7 @@ const LINKS = [
   { href: '/#strategies', label: 'Strategies' },
   { href: '/#accounts', label: 'Accounts' },
   { href: '/#rules', label: 'Rules' },
+  { href: '/brief', label: 'Brief' },
 ];
 
 export function SiteFooter() {

@@ -1,6 +1,6 @@
 import type { Asset } from './assets';
 import type { Reserve } from './aave';
-import { inRange, sqrtPriceAtTick } from './tick';
+import { humanAtTick, inRange, sqrtPriceAtTick } from './tick';
 import { sub256 } from './units';
 
 export const AAVE_POOL = '0x794a61358d6845594f94dc1db02a252b5b4814ad';
@@ -18,9 +18,16 @@ const ASSET_PRICE = '0xb3596f07';
 const ADDRESSES_PROVIDER = '0x0542975c';
 const PRICE_ORACLE = '0xfca513a8';
 
+function onLocalhost(): boolean {
+  return typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+}
+
 export function rpcUrl(): string {
   const configured = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_ARBITRUM_RPC : undefined;
-  return configured || DEFAULT_RPC;
+  if (configured) return configured;
+  if (onLocalhost()) return '/rpc';
+  if (typeof window !== 'undefined') return 'https://arbitrum-one-rpc.publicnode.com';
+  return DEFAULT_RPC;
 }
 
 export type PoolSnapshot = {
@@ -56,7 +63,60 @@ export async function readPool(pool: string, tickLower: number, tickUpper: numbe
   };
 }
 
+export async function readSlot(pool: string, rpc = rpcUrl()): Promise<{ sqrtPriceX96: bigint; tick: number; liquidity: bigint }> {
+  const [slot0, liquidity] = await batch(rpc, [
+    { to: pool, data: SLOT0 },
+    { to: pool, data: LIQUIDITY },
+  ]);
+  return {
+    sqrtPriceX96: word(slot0, 0),
+    tick: Number(signed(word(slot0, 1))),
+    liquidity: word(liquidity, 0),
+  };
+}
+
+export type DepthBin = { tick: number; price: number; size: number };
+
+/** Active liquidity around the current tick, sampled on the pool's tick spacing. */
+export async function readDepth(pool: string, spacing: number, decimals0: number, decimals1: number, rpc = rpcUrl()): Promise<DepthBin[]> {
+  const slot = await readSlot(pool, rpc);
+  const center = Math.floor(slot.tick / spacing) * spacing;
+  const each = 20;
+  const ticks: number[] = [];
+  for (let step = -each; step <= each; step += 1) ticks.push(center + step * spacing);
+  const rows = await batch(rpc, ticks.map((tick) => ({ to: pool, data: TICKS + encodeInt24(tick) })));
+  const nets = rows.map((row) => signed(word(row, 1)));
+  const active = new Array<bigint>(ticks.length).fill(0n);
+  active[each] = slot.liquidity;
+  let above = slot.liquidity;
+  for (let index = each + 1; index < ticks.length; index += 1) {
+    above += nets[index];
+    active[index] = above;
+  }
+  let below = slot.liquidity;
+  for (let index = each; index > 0; index -= 1) {
+    below -= nets[index];
+    active[index - 1] = below;
+  }
+  let max = 1n;
+  for (const value of active) {
+    if (value > max) max = value;
+  }
+  return ticks.map((tick, index) => ({
+    tick,
+    price: humanAtTick(tick, decimals0, decimals1),
+    size: active[index] > 0n ? Number((active[index] * 10_000n) / max) / 10_000 : 0,
+  }));
+}
+
 let oracleAddress: string | null = null;
+
+/** Aave oracle price. Does not require the reserve to be active. */
+export async function readPriceUsd(asset: Asset, rpc = rpcUrl()): Promise<number> {
+  const oracle = await priceOracle(rpc);
+  const price = await call(rpc, oracle, ASSET_PRICE + padAddress(asset.address));
+  return Number(word(price, 0)) / 1e8;
+}
 
 export async function readReserve(asset: Asset, rpc = rpcUrl()): Promise<Reserve> {
   const oracle = await priceOracle(rpc);
@@ -128,7 +188,18 @@ async function call(rpc: string, to: string, data: string): Promise<string> {
   return result;
 }
 
+const FALLBACK_RPC = 'https://arbitrum-one-rpc.publicnode.com';
+
 async function batch(rpc: string, calls: Call[]): Promise<string[]> {
+  try {
+    return await batchOnce(rpc, calls);
+  } catch (error) {
+    if (rpc === FALLBACK_RPC) throw error;
+    return batchOnce(FALLBACK_RPC, calls);
+  }
+}
+
+async function batchOnce(rpc: string, calls: Call[]): Promise<string[]> {
   const body = calls.map((item, id) => ({
     jsonrpc: '2.0',
     id,

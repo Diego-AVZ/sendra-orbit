@@ -4,6 +4,21 @@ import { depositFromToken1, dilute, feesOwed, getAmountsForLiquidity } from './l
 import { assertRange, humanAtTick, inRange, sqrtAtHuman, sqrtPriceAtTick } from './tick';
 import { amountUsd, humanFromSqrt, maxDrawdown, money } from './units';
 
+/** True when USD prices imply the same token1-per-token0 price the pool is trading. */
+export function usdPricesMatchPool(
+  sqrtPriceX96: bigint,
+  decimals0: number,
+  decimals1: number,
+  price0Usd: number,
+  price1Usd: number,
+): boolean {
+  if (!(price0Usd > 0) || !(price1Usd > 0)) return false;
+  const human = humanFromSqrt(sqrtPriceX96, decimals0, decimals1);
+  if (!(human > 0)) return false;
+  const ratio = (price0Usd / price1Usd) / human;
+  return ratio > 1 / 1.5 && ratio < 1.5;
+}
+
 export type LpSnapshot = {
   pool: string;
   token0: string;
@@ -124,6 +139,9 @@ export function openLp(input: LpOpenInput): LpSnapshot {
 export function markLp(snapshot: LpSnapshot, quote: LpQuote): Mark {
   const sqrtPrice = quote.sqrtPriceX96 ?? (quote.priceToken1Per0 ? sqrtAtHuman(quote.priceToken1Per0, snapshot.decimals0, snapshot.decimals1) : null);
   if (sqrtPrice == null) throw new Error('price');
+  if (!usdPricesMatchPool(sqrtPrice, snapshot.decimals0, snapshot.decimals1, quote.price0Usd, quote.price1Usd)) {
+    throw new Error('token prices unavailable');
+  }
   const sqrtA = sqrtPriceAtTick(snapshot.tickLower);
   const sqrtB = sqrtPriceAtTick(snapshot.tickUpper);
   const amounts = getAmountsForLiquidity(sqrtPrice, sqrtA, sqrtB, snapshot.liquidity);

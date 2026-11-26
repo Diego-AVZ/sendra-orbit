@@ -1,5 +1,7 @@
-import { readPool, readReserve } from './chain';
-import { fetchAssetCandles, fetchPoolCandles, poolPrices } from './market';
+import { ASSETS, type Asset } from './assets';
+import { readPool, readPriceUsd, readReserve } from './chain';
+import { usdPricesMatchPool } from './lp';
+import { assetPriceUsd, fetchAssetCandles, fetchPoolCandles, poolPrices } from './market';
 import {
   closePosition,
   createAave,
@@ -63,9 +65,11 @@ export async function openLeveragedLive(
 }
 
 export async function openSpotLive(input: SpotOpenInput & Persist & { userId?: string | null; evaluationId?: string | null }): Promise<LiveResult> {
-  const reserve = await readReserve(input.asset, input.rpc);
-  const position = createSpot({ ...input, priceUsd: input.priceUsd || reserve.priceUsd });
-  return finish(position, [], input);
+  const warnings: string[] = [];
+  let priceUsd = input.priceUsd;
+  if (!(priceUsd > 0)) priceUsd = await assetPriceUsd(input.asset, input.rpc);
+  const position = createSpot({ ...input, priceUsd });
+  return finish(position, warnings, input);
 }
 
 export async function refreshLive(position: PaperPosition, options: Persist = {}): Promise<LiveResult> {
@@ -82,12 +86,23 @@ export async function closeLive(position: PaperPosition, options: Persist = {}):
   return finish(closed, warnings, options);
 }
 
+function noteQuote(warnings: string[], error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  if (message === 'GeckoTerminal rate limit') return;
+  warnings.push(message);
+}
+
 async function finish(position: PaperPosition, warnings: string[], options: Persist): Promise<LiveResult> {
   if (!options.persist) return { position, warnings };
-  const saved = position.status === 'open' && position.mark?.at === position.openedAt
-    ? await savePosition(position, options.accessToken)
-    : await saveMark(position, options.accessToken);
-  return { position: saved, warnings };
+  try {
+    const saved = position.status === 'open' && position.mark?.at === position.openedAt
+      ? await savePosition(position, options.accessToken)
+      : await saveMark(position, options.accessToken);
+    return { position: saved, warnings };
+  } catch (error) {
+    warnings.push(error instanceof Error ? error.message : 'Supabase did not save this position');
+    return { position, warnings };
+  }
 }
 
 async function quoteLive(position: PaperPosition, rpc: string | undefined, warnings: string[]): Promise<PositionQuote> {
@@ -95,19 +110,14 @@ async function quoteLive(position: PaperPosition, rpc: string | undefined, warni
   if (position.kind === 2 || position.kind === 8) {
     const lp = position.kind === 2 ? position.snapshot as { pool: string; token0: string; token1: string; tickLower: number; tickUpper: number } : (position.snapshot as { lp: { pool: string; token0: string; token1: string; tickLower: number; tickUpper: number } }).lp;
     const pool = await readPool(lp.pool, lp.tickLower, lp.tickUpper, rpc);
-    const stored = lp as { price0Usd?: number; price1Usd?: number };
+    const shape = lp as { decimals0: number; decimals1: number };
     let candles;
-    let prices = { price0Usd: stored.price0Usd ?? 0, price1Usd: stored.price1Usd ?? 0 };
     try {
-      const [nextCandles, nextPrices] = await Promise.all([
-        fetchPoolCandles(lp.pool, lp.token0, lp.token1, since),
-        poolPrices(lp.pool, lp.token0, lp.token1),
-      ]);
-      candles = nextCandles;
-      prices = nextPrices;
+      candles = await fetchPoolCandles(lp.pool, lp.token0, lp.token1, since);
     } catch (error) {
-      warnings.push(error instanceof Error ? error.message : 'candles unavailable');
+      noteQuote(warnings, error, 'candles unavailable');
     }
+    const prices = await liveUsdPrices(lp.pool, lp.token0, lp.token1, shape.decimals0, shape.decimals1, pool.sqrtPriceX96, rpc);
     const lpQuote = {
       at: new Date().toISOString(),
       sqrtPriceX96: pool.sqrtPriceX96,
@@ -124,16 +134,23 @@ async function quoteLive(position: PaperPosition, rpc: string | undefined, warni
     return { kind: 8, aave: { ...aave, at: lpQuote.at }, lp: lpQuote };
   }
   if (position.kind === 4) {
-    const snapshot = position.snapshot as { symbol: string };
-    let candles;
+    const snapshot = position.snapshot as { symbol: string; asset: string; decimals: number };
+    let candles: Awaited<ReturnType<typeof fetchAssetCandles>> | undefined;
     try {
       candles = await fetchAssetCandles(snapshot.symbol, since);
     } catch (error) {
-      warnings.push(error instanceof Error ? error.message : 'candles unavailable');
+      noteQuote(warnings, error, 'candles unavailable');
     }
-    const asset = { symbol: snapshot.symbol, address: (position.snapshot as { asset: string }).asset, decimals: (position.snapshot as { decimals: number }).decimals };
-    const reserve = await readReserve(asset, rpc);
-    return { kind: 4, spot: { at: new Date().toISOString(), priceUsd: reserve.priceUsd, candles } };
+    const asset = { symbol: snapshot.symbol, address: snapshot.asset, decimals: snapshot.decimals };
+    let priceUsd = 0;
+    try {
+      priceUsd = await readPriceUsd(asset, rpc);
+    } catch {
+      /* UNI and other frozen reserves revert; the market price still values the spot. */
+    }
+    if (!(priceUsd > 0) && candles?.length) priceUsd = candles[candles.length - 1].close;
+    if (!(priceUsd > 0)) priceUsd = await assetPriceUsd(asset, rpc);
+    return { kind: 4, spot: { at: new Date().toISOString(), priceUsd, candles } };
   }
   return { kind: position.kind, aave: await aaveQuote(position, rpc, since, warnings) };
 }
@@ -149,7 +166,7 @@ async function aaveQuote(position: PaperPosition, rpc: string | undefined, since
   try {
     candles = await fetchAssetCandles(snapshot.symbol, since);
   } catch (error) {
-    warnings.push(error instanceof Error ? error.message : 'candles unavailable');
+    noteQuote(warnings, error, 'candles unavailable');
   }
   return {
     at: new Date().toISOString(),
@@ -168,4 +185,32 @@ type AssetLeg = { asset: string; symbol: string; decimals: number };
 
 function asAsset(leg: AssetLeg): Asset {
   return { symbol: leg.symbol, address: leg.asset, decimals: leg.decimals };
+}
+
+/** Gecko prices, then the Aave oracle. Entry prices on the snapshot are not a valuation. */
+async function liveUsdPrices(
+  pool: string,
+  token0: string,
+  token1: string,
+  decimals0: number,
+  decimals1: number,
+  sqrtPriceX96: bigint,
+  rpc: string | undefined,
+): Promise<{ price0Usd: number; price1Usd: number }> {
+  try {
+    const prices = await poolPrices(pool, token0, token1);
+    if (usdPricesMatchPool(sqrtPriceX96, decimals0, decimals1, prices.price0Usd, prices.price1Usd)) return prices;
+  } catch {
+    // Oracle below is the valuation when the pool feed is missing or rate-limited.
+  }
+  const price0Usd = await oracleUsd(token0, rpc);
+  const price1Usd = await oracleUsd(token1, rpc);
+  if (!usdPricesMatchPool(sqrtPriceX96, decimals0, decimals1, price0Usd, price1Usd)) throw new Error('token prices unavailable');
+  return { price0Usd, price1Usd };
+}
+
+async function oracleUsd(address: string, rpc: string | undefined): Promise<number> {
+  const asset = Object.values(ASSETS).find((item) => item.address === address.toLowerCase());
+  if (!asset) throw new Error('token prices unavailable');
+  return assetPriceUsd(asset, rpc);
 }

@@ -7,7 +7,7 @@ const ROWS = [
 
 export function PaperTicket() {
   return (
-    <article className="rounded-3xl border border-white/10 bg-ink/75 p-5 shadow-ticket backdrop-blur-md">
+    <article className="rounded-none border border-white/10 bg-ink/75 p-5 shadow-ticket backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] uppercase tracking-eyebrow text-mist">Orbit Paper</p>
         <p className="inline-flex items-center gap-2 text-[11px] uppercase tracking-eyebrow text-moss">

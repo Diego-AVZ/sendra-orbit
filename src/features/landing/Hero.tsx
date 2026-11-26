@@ -21,7 +21,10 @@ export function Hero({ onRequest }: { onRequest: () => void }) {
             <strong>Virtual capital. Real mechanics.</strong> Run Uniswap, Aave and spot on live market data. Pass the rules, and become eligible to manage capital through Sendra.
           </p>
           <div className="land-actions">
-            <button type="button" className="land-go" onClick={onRequest}>
+            <a className="land-go" href={withBase('/app')}>
+              Open app
+            </a>
+            <button type="button" className="land-ghost" onClick={onRequest}>
               Request access
             </button>
             <a className="land-ghost" href={withBase('/#path')}>

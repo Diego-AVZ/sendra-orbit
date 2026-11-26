@@ -13,7 +13,7 @@ export function Strategies() {
             <h3>Uniswap LP</h3>
             <p>Pool, fee tier and range. The engine follows tick liquidity, fee growth and the path of price.</p>
             <svg className="range-sketch" viewBox="0 0 420 92" aria-hidden="true">
-              <rect x="78" y="16" width="200" height="52" rx="8" fill="rgba(77,139,255,0.16)" stroke="#4d8bff" />
+              <rect x="78" y="16" width="200" height="52" rx="8" fill="rgba(61,220,151,0.16)" stroke="#3ddc97" />
               <path d="M8 70 C 50 64, 90 40, 140 36 S 220 58, 280 28 S 360 48, 412 34" fill="none" stroke="#f4f4f5" strokeWidth="2" />
               <circle cx="250" cy="32" r="4" fill="#fff" />
             </svg>

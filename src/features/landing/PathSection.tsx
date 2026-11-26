@@ -7,7 +7,7 @@ export function PathSection() {
         <div className="land-sec-head reveal">
           <p className="land-kicker">The path</p>
           <h2>Enter. Prove. Progress.</h2>
-          <p>An operator builds a record, manages a book, and can move toward a larger allocation.</p>
+          <p>An operator is tested in simulation, then with limited real capital, and can earn the full allocation.</p>
         </div>
         <ol className="land-steps reveal">
           {PATH.map((step) => (

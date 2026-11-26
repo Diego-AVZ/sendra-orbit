@@ -50,8 +50,8 @@ export function createLp(input: LpOpenInput & Owner): PaperPosition {
 
 export function createAave(input: AaveOpenInput & Owner): PaperPosition {
   if (input.kind === 8) throw new Error('use createLeveragedLp');
-  const snapshot = openAave({ ...input, openedAt: input.at ?? input.openedAt });
-  const at = snapshot.openedAt;
+  const at = input.at ?? input.openedAt ?? new Date().toISOString();
+  const snapshot = openAave({ ...input, openedAt: at });
   const mark = markAave(snapshot, { at, seconds: 0, prices: pricesOf(input) });
   return row(input.kind, at, input, snapshot, mark, {
     protocol: 'aave-v3',

@@ -2,7 +2,7 @@ import { openAave, sized, type Reserve } from './aave';
 import { USDC, WETH, type Asset } from './assets';
 import { feesFromCandles } from './candles';
 import { feesOwed, dilute } from './liquidity';
-import { markLp, openLp } from './lp';
+import { markLp, openLp, usdPricesMatchPool } from './lp';
 import { closePosition, createLp, fromRow, toRow } from './position';
 import { openSpot, markSpot } from './spot';
 import { MAX_SQRT_PRICE, MIN_SQRT_PRICE, sqrtAtHuman, sqrtPriceAtTick, tickAtHuman } from './tick';
@@ -64,6 +64,14 @@ near(marked.healthFactor ?? 0, 1.44375, 0.02, 'health factor');
 check(marked.liquidated === false, 'not liquidated');
 const broken = markAave(loop, { at: '2026-01-02T00:00:00.000Z', seconds: 0, prices: { [WETH.address]: 500, [USDC.address]: 1 } });
 check(broken.liquidated, 'liquidated');
+const staleCandle = markAave(loop, {
+  at: '2026-01-02T00:00:00.000Z',
+  seconds: 0,
+  prices: { [WETH.address]: 1500, [USDC.address]: 1 },
+  candles: [{ time: 0, open: 100, high: 100, low: 100, close: 100, volumeUsd: 0 }],
+});
+check(staleCandle.price === 1500, 'oracle price survives a stale candle');
+check(staleCandle.liquidated === false, 'stale candle does not liquidate');
 
 const supplied = openAave({
   kind: 5,
@@ -115,6 +123,15 @@ const earned = markLp(lp, {
 });
 near(earned.feesUsd, 1, 0.05, 'fee growth');
 check((earned.impermanentLossUsd ?? 0) === 0, 'no il at the entry price');
+check(usdPricesMatchPool(sqrtPrice, 18, 6, 3000, 1), 'usd prices follow the pool');
+check(!usdPricesMatchPool(sqrtPrice, 18, 6, 1, 3000), 'swapped usd prices are rejected');
+let unmarked = false;
+try {
+  markLp(lp, { at: '2026-01-02T00:00:00.000Z', sqrtPriceX96: sqrtPrice, price0Usd: 3000, price1Usd: 0 });
+} catch {
+  unmarked = true;
+}
+check(unmarked, 'a mark without token prices is refused');
 
 const wide = openLp({
   ...lp,

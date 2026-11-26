@@ -1,6 +1,15 @@
 import { Component, type ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { ScrollToTop } from '@/components/ScrollToTop';
+import { BookProvider } from '@/desk/book';
+import { SessionProvider } from '@/desk/session';
+import { AaveDesk } from '@/desk/AaveDesk';
+import { LiquidityDesk } from '@/desk/LiquidityDesk';
+import { Overview } from '@/desk/Overview';
+import { Portfolio } from '@/desk/Portfolio';
+import { Shell } from '@/desk/Shell';
+import { SpotDesk } from '@/desk/SpotDesk';
+import { BriefPage } from '@/pages/BriefPage';
 import { LandingPage } from '@/pages/LandingPage';
 import { MissingPage } from '@/pages/MissingPage';
 
@@ -39,6 +48,23 @@ export default function App() {
       <Boundary>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/brief" element={<BriefPage />} />
+          <Route
+            path="/app"
+            element={
+              <SessionProvider>
+                <BookProvider>
+                  <Shell />
+                </BookProvider>
+              </SessionProvider>
+            }
+          >
+            <Route index element={<Overview />} />
+            <Route path="portfolio" element={<Portfolio />} />
+            <Route path="spot" element={<SpotDesk />} />
+            <Route path="aave" element={<AaveDesk />} />
+            <Route path="liquidity" element={<LiquidityDesk />} />
+          </Route>
           <Route path="*" element={<MissingPage />} />
         </Routes>
       </Boundary>

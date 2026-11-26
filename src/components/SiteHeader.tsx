@@ -48,6 +48,9 @@ export function SiteHeader({ onRequest }: { onRequest?: () => void }) {
             </a>
           )}
         </nav>
+        <a className="land-go land-app" href={withBase('/app')}>
+          Open app
+        </a>
         {onRequest ? (
           <button type="button" className="land-go land-go-top" onClick={onRequest}>
             Request access

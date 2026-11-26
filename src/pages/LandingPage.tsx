@@ -79,7 +79,7 @@ export function LandingPage() {
         <Accounts onRequest={setRequest} />
         <Rules />
         <Infrastructure />
-        <Close />
+        <Close onRequest={() => setRequest('general')} />
       </main>
       <SiteFooter />
       <AccessDialog tier={request} onClose={close} />

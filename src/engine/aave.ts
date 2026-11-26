@@ -200,7 +200,6 @@ export function markAave(snapshot: AaveSnapshot, quote: AaveQuote): Mark {
   for (const leg of [...snapshot.collateral, ...snapshot.debt]) prices.set(leg.asset, leg.openPriceUsd);
   for (const [address, price] of Object.entries(quote.prices ?? {})) prices.set(address.toLowerCase(), price);
   const candles = quote.candles ? sortCandles(quote.candles) : [];
-  if (candles.length) prices.set(snapshot.asset, candles[candles.length - 1].close);
 
   const valued = valueBook(snapshot, prices, quote);
   const exit = quote.realize ? exitCost(snapshot, prices) : 0;

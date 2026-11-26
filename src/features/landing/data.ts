@@ -1,53 +1,27 @@
-export const ACCOUNTS = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 25,
-    capital: 3000,
-    line: 'A first book. Learn the rules on a defined evaluation.',
-  },
-  {
-    id: 'advanced',
-    name: 'Advanced',
-    price: 49,
-    capital: 5000,
-    line: 'The working size for a full challenge.',
-  },
-  {
-    id: 'professional',
-    name: 'Professional',
-    price: 99,
-    capital: 10000,
-    line: 'A larger virtual allocation under the same standard.',
-  },
-] as const;
-
-export type AccountId = (typeof ACCOUNTS)[number]['id'];
-
-export const TIERS = [{ id: 'general', name: 'Not sure yet' }, ...ACCOUNTS] as const;
+export { ACCOUNTS, COMING, RULE_LINES, type AccountId } from '@/lib/plans';
 
 export const PATH = [
   {
     n: '01',
     title: 'Orbit Challenge',
-    body: 'Buy an evaluation with a defined virtual allocation. The window, the target and the limits are published before you pay.',
+    body: 'The first phase, fully simulated. Buy the evaluation. The window, the target and the limits are published before you pay.',
   },
   {
     n: '02',
-    title: 'Orbit Paper',
-    body: 'Operate that capital on live market data. Uniswap ranges, Aave books and spot positions follow the mechanics of the protocols.',
+    title: 'Orbit Real',
+    body: 'The next phase, on mainnet. A small allocation of real capital, still inside the rules. If the book is profitable, you are paid.',
   },
   {
     n: '03',
     title: 'Orbit Funded',
-    body: 'Pass the rules and become eligible for a real allocation. Profits are shared. The first capital is company-owned, and small on purpose.',
+    body: 'Pass both phases and the cap comes off. You manage the full allocation. Profits are shared.',
   },
 ] as const;
 
 export const TERMS = [
-  { name: 'Orbit Challenge', line: 'The paid evaluation.' },
-  { name: 'Orbit Paper', line: 'The simulated book.' },
-  { name: 'Orbit Funded', line: 'Real capital, after you qualify.' },
+  { name: 'Orbit Challenge', line: 'Simulated capital. The first evaluation.' },
+  { name: 'Orbit Real', line: 'Limited real capital on mainnet. Profits are paid.' },
+  { name: 'Orbit Funded', line: 'The full allocation, after you qualify.' },
   { name: 'Orbit Score', line: 'Performance and risk, in one record.' },
   { name: 'Orbit Reputation', line: 'A history you can carry forward.' },
 ] as const;
