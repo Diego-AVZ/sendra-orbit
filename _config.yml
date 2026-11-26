@@ -1,0 +1,2 @@
+# Keep the branch publisher from replacing the Vite build with this source tree.
+theme: sendra-orbit-actions-only

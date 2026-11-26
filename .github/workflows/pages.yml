@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  administration: write
 
 concurrency:
   group: pages
@@ -18,6 +19,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Publish the Vite artifact, not the source tree
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.request('PUT /repos/{owner}/{repo}/pages', {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                build_type: 'workflow',
+              })
+            } catch (error) {
+              core.warning(error.message)
+            }
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Node
